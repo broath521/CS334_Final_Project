@@ -1,0 +1,28 @@
+20 30
+100
+Q
+
+//Choice of starting angle and branch type
+Q 0.50 : FA
+Q 0.50 : FB
+
+//Main pathing with preference for left turns
+A 0.40 : F+B
+A 0.30 : F[-G]+B
+A 0.10 : F-B
+A 0.20 : FA
+
+//Main pathing with preference for right turns
+B 0.10 : F+A
+B 0.40 : F-A
+B 0.30 : F[+G]-A
+B 0.20 : FB
+
+//Side branches, small chance to create new branch head nodes
+G 0.35 : g+G
+G 0.05 : [-G]+G
+G 0.05 : [+G]-G
+G 0.35 : g-G
+G 0.20 : g
+
+
