@@ -12,6 +12,10 @@ using UnityEngine.Tilemaps;
 
 namespace Assets.ScriptableObjects
 {
+    /*
+     * Most of the code for L-system generation in this class is taken from Assignment 4 from CS334 - Spring 2023
+     * This code implements a stochastic method for generate semi-realistic river pathing and branching
+    */
     public class RiverGenerator : MonoBehaviour
    {
         System.Random random;
@@ -19,6 +23,8 @@ namespace Assets.ScriptableObjects
         string lSystemString;
         List<Vector2> riverMap; //river mask storage for each turning point
         List<Vector2> entireRiver; //every tile to draw for the river
+        List<Vector2> updatedEntireRiver; //modifed entireRiver
+        List<Vector2> updatedRiverMap;
 
         float lowerAng = 0;
         float upperAng = 0;
@@ -62,7 +68,7 @@ namespace Assets.ScriptableObjects
             //Debug.Log(lSystemString);
 
             // Draw L-system onto tilemap
-            DrawRiver(lSystemString, tilemap);
+            riverMap = DrawRiver(lSystemString, tilemap);
             return riverMap;
         }
 
@@ -219,7 +225,9 @@ namespace Assets.ScriptableObjects
                         List<Vector2> neighbors = GetTileNeighbors((int)tile.x, (int)tile.y);
                         foreach (Vector2 newtile in neighbors)
                         {
-                            entireRiver.Add(newtile);
+                            if (!entireRiver.Contains(newtile)){
+                                entireRiver.Add(newtile);
+                            }
                         }
                         entireRiver.Add(tile);
                     }
@@ -277,11 +285,6 @@ namespace Assets.ScriptableObjects
                 }
             }
             
-            Debug.Log(leftBound);
-            Debug.Log(rightBound);
-            Debug.Log(topBound);
-            Debug.Log(bottomBound);
-            
             return riverMap;
         }
 
@@ -336,33 +339,27 @@ namespace Assets.ScriptableObjects
                     neighbors.Add(new Vector2(i, j));
                 }
             }
-
             return neighbors;
         }
 
-        public void DrawConnections(TilemapStructure tilemap, Tilemap TMap)
+        public IEnumerator DrawConnections(TilemapStructure tilemap, Tilemap TMap)
         {
-            float deepChance = 0.7f;
-
-            foreach(Vector2 tile in entireRiver)
+            foreach(Vector2 tile in updatedEntireRiver)
             {
                 if (tile.x >= 0 && tile.x < tilemap.Width && tile.y >= 0 && tile.y < tilemap.Height)
                 {
-                    float randVal = (random.Next(0, 1000) / 1000f);
-                    if (randVal < deepChance)
-                        tilemap.SetTile((int)tile.x, (int)tile.y, 0);
-                    else
-                        tilemap.SetTile((int)tile.x, (int)tile.y, 1);
+                    tilemap.SetTile((int)tile.x, (int)tile.y, 0);
 
-                    StartCoroutine(WaitRender());
-                    Debug.Log("Yes");
                     Tile typeTile = tilemap.tileDict[tilemap.GetTile((int)tile.x, (int)tile.y)];
                     TMap.SetTile(new Vector3Int((int)tile.x, (int)tile.y, 0), typeTile);
                     TMap.RefreshTile(new Vector3Int((int)tile.x, (int)tile.y, 0));
+
+                    yield return new WaitForSeconds(0.002f);
                 }
             }
         }
 
+        //update the furthest positions of the river if necessasary
         private void UpdateBounds(Vector2 newPos)
         {
             if(newPos.x < leftBound)
@@ -384,38 +381,76 @@ namespace Assets.ScriptableObjects
             }
         }
 
-        public void UpdateRiver(TilemapStructure tilemap)
+        //check the updated furthest positions of the river, if they are past the tilemap bounds, update the current river maps
+        public List<Vector2> UpdateRiver(TilemapStructure tilemap)
         {
-            if(leftBound < 0) { 
-                for(int i = 0; i < entireRiver.Count; i++)
+            updatedRiverMap = new List<Vector2>();
+            updatedEntireRiver = new List<Vector2>();
+            List<Vector2> currRiverMap = entireRiver;
+
+            Vector2 tempVec = new();
+
+            if (leftBound < 0) { 
+                for(int i = 0; i < currRiverMap.Count; i++)
                 {
-                    Vector2 tempVec = new Vector2(entireRiver[i].x, entireRiver[i].y);
+                    tempVec.x = currRiverMap[i].x;
+                    tempVec.y = currRiverMap[i].y;
+
                     tempVec.x += Mathf.Abs(leftBound);
                     if (bottomBound < 0)
                     {
                         tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height/5;
                     }
-                    entireRiver[i] = tempVec;
+                    updatedEntireRiver.Add(tempVec);
+                }
+
+                for (int i = 0; i < riverMap.Count; i++)
+                {
+                    tempVec.x = riverMap[i].x;
+                    tempVec.y = riverMap[i].y;
+
+                    tempVec.x += Mathf.Abs(leftBound);
+                    if (bottomBound < 0)
+                    {
+                        tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height / 5;
+                    }
+                    updatedRiverMap.Add(tempVec);
                 }
             }
-            if (rightBound > tilemap.Width)
+            else if (rightBound > tilemap.Width)
             {
-                for (int i = 0; i < entireRiver.Count; i++)
+                for (int i = 0; i < currRiverMap.Count; i++)
                 {
-                    Vector2 tempVec = new Vector2(entireRiver[i].x, entireRiver[i].y);
+                    tempVec.x = currRiverMap[i].x;
+                    tempVec.y = currRiverMap[i].y;
+
                     tempVec.x -= rightBound - tilemap.Width;
                     if (bottomBound < 0)
                     {
                         tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height/5;
                     }
-                    entireRiver[i] = tempVec;
+                    updatedEntireRiver.Add(tempVec);
+                }
+                for (int i = 0; i < riverMap.Count; i++)
+                {
+                    tempVec.x = riverMap[i].x;
+                    tempVec.y = riverMap[i].y;
+
+                    tempVec.x -= rightBound - tilemap.Width;
+                    if (bottomBound < 0)
+                    {
+                        tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height / 5;
+                    }
+                    updatedRiverMap.Add(tempVec);
                 }
             }
-        }
+            else
+            {
+                updatedEntireRiver = currRiverMap;
+                updatedRiverMap = riverMap;
+            }
 
-        IEnumerator WaitRender()
-        {
-            yield return new WaitForSeconds(1);
+            return updatedRiverMap;
         }
     }
 }

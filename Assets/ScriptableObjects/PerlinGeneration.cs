@@ -21,14 +21,15 @@ namespace Assets.ScriptableObjects
 
         //tilemap script and value class
         [Serializable]
-        class TileValues
+        class TileData
         {
             [Range(0f, 1f)]
             public float Height;
-            public GroundTileType GroundTile;
+            public TerrainType GroundTile;
         }
+
         [SerializeField]
-        private TileValues[] TileTypes;
+        private TileData[] TileTypes;
 
         public float adjustVal = 0.1f;
         public float riverRange = 5f;
@@ -46,13 +47,15 @@ namespace Assets.ScriptableObjects
             float height = 0;
             //generate a noise map with given parameters
             noiseMap = GenerateNoiseMap(tilemap.Width, tilemap.Height, tilemap.Seed, NoiseScale, Octaves, Persistance, Lacunarity, Offset);
+            //Generate a distance map corresponding to generated river
             distanceMap = GenerateDistanceMap(tilemap.Width, tilemap.Height, riverMap);
 
-            //go through entire tilemap size to apply noise map
+            //go through bounds to check noise and distance maps and change terrain
             for (int x=0; x < tilemap.Width; x++)
             {
                 for (int y = 0; y < tilemap.Height; y++)
                 {
+                    //if the distanceMap flag at this position is set, change the tile height
                     if (distanceMap[y * tilemap.Width + x] == 1)
                     {
                         height = changeTerrain(noiseMap[y * tilemap.Width + x]);
@@ -65,7 +68,7 @@ namespace Assets.ScriptableObjects
                     //Check all of the assigned tile types
                     for (int i = 0; i < TileTypes.Length; i++)
                     {
-                        //If the height value at the current location is less than or equal to the assigned limit, set that tile to be of type [i]
+                        //If the height value at position is <= user defined limit, set that tile to be of that indexed type
                         if (height <= TileTypes[i].Height)
                         {
                             tilemap.SetTile(x, y, (int)TileTypes[i].GroundTile);
@@ -79,14 +82,8 @@ namespace Assets.ScriptableObjects
         public static float[] GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity, Vector2 offset)
         {
             float[] noiseMap = new float[mapWidth * mapHeight];
-
             var random = new System.Random(seed);
-
-            // We need atleast one octave
-            if (octaves <= 0)
-            {
-                octaves = 1;
-            }
+            octaves = octaves <= 0 ? 1 : octaves;
 
             Vector2[] octaveOffsets = new Vector2[octaves];
             for (int i = 0; i < octaves; i++)
@@ -180,7 +177,7 @@ namespace Assets.ScriptableObjects
                 }
             }
 
-            //Check if the distanceMap value is within range of river, if so set tag to change later
+            //Check if the distanceMap value is within range of river, if so set tag
             for (int i = 0; i < distanceMap.Length; i++)
             {
                 if(distanceMap[i] < riverRange)
@@ -200,14 +197,12 @@ namespace Assets.ScriptableObjects
         {
             float newHeight;
 
-            if(currentHeight <= TileTypes[1].Height)
-            {
-                newHeight = TileTypes[2].Height;
-            }
+            //any tiles within range that are of water or sand, change to beach1
             if (currentHeight <= TileTypes[3].Height)
             {
                 newHeight = TileTypes[2].Height;
             }
+            //anything above beach2, subtract user defined value from height
             else if(currentHeight > TileTypes[3].Height && currentHeight <= TileTypes[TileTypes.Length - 1].Height)
             {
                 currentHeight -= adjustVal;

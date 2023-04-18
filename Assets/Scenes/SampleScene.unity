@@ -177,7 +177,7 @@ Camera:
   far clip plane: 1000
   field of view: 175
   orthographic: 1
-  orthographic size: 150
+  orthographic size: 200
   m_Depth: -1
   m_CullingMask:
     serializedVersion: 2
@@ -223,8 +223,8 @@ MonoBehaviour:
   moveSpeed: 150
   zoomSpeed: 30
   zoomOffset: 0.2
-  minZoom: 10
-  maxZoom: 200
+  minZoom: 50
+  maxZoom: 400
   terrainMap: {fileID: 880319959}
 --- !u!1 &880319959
 GameObject:
@@ -361,8 +361,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e5b0d1c612e41574983a9ed597f9db47, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Width: 500
-  Height: 500
+  Width: 400
+  Height: 400
   TileSize: 8
   Seed: 753763
   TileTypes:
@@ -403,9 +403,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   riverFile: Assets/Rivers/river2.txt
-  distance: 5
-  startingAngle: 135
-  startX: 300
+  distance: 4
+  startingAngle: 120
+  startX: 250
   startY: 0
 --- !u!114 &880319966
 MonoBehaviour:
@@ -450,7 +450,7 @@ MonoBehaviour:
   - Height: 1
     GroundTile: 11
   adjustVal: 0.15
-  riverRange: 6
+  riverRange: 4
 --- !u!1 &1980643147
 GameObject:
   m_ObjectHideFlags: 0

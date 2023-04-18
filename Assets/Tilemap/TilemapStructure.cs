@@ -17,7 +17,7 @@ namespace Assets.Tilemaps
         [Serializable]
         class TileType
         {
-            public GroundTileType GroundTile;
+            public TerrainType GroundTile;
             public Color Color;
         }
 
@@ -30,14 +30,14 @@ namespace Assets.Tilemaps
         PerlinGeneration perlinGen; //Perlin noise generation script
         RiverGenerator riverGen; //L-system river generation script
 
-        List<Vector2> riverMap; //River mask storage
+        List<Vector2> riverMap, riverMapUpdated; //River mask storage
 
         private void Awake()
         {
             //Retrieve components and scripts
             terrainMap = GameObject.Find("TerrainMap");
             perlinGen = terrainMap.GetComponent<PerlinGeneration>();
-            riverGen = terrainMap.GetComponent <RiverGenerator>();
+            riverGen = terrainMap.GetComponent<RiverGenerator>();
             TMap = GetComponent<Tilemap>();
 
             // Initialize the one-dimensional array with our map size
@@ -63,9 +63,8 @@ namespace Assets.Tilemaps
                 tileDict.Add((int)tiletype.GroundTile, tile);
             }
             //Generate river from L-system
-            riverMap = riverGen.Apply(this);
-            riverGen.UpdateRiver(this);
-
+            riverGen.Apply(this);
+            riverMap = riverGen.UpdateRiver(this);
             //Perlin noise to tile map
             perlinGen.Generate(this, riverMap);
 
@@ -77,29 +76,31 @@ namespace Assets.Tilemaps
         {
             //Wait until the user presses the return key, then generate river block by block
             if (Input.GetKeyDown(KeyCode.Return)) {
-                riverGen.DrawConnections(this, TMap);
+                StartCoroutine(riverGen.DrawConnections(this, TMap));
             }
         }
 
         public void RenderTerrainTiles()
         {
-            // Create a positions array and tile array required by _graphicMap.SetTiles
+            // Create a positions and Tile array for SetTiles method
             var positionsArray = new Vector3Int[Width * Height];
             var tilesArray = new Tile[Width * Height];
 
-            // Loop over all our tiles in our data structure
+            // Loop over tiles within bounds
             for (int x = 0; x < Width; x++)
             {
                 for (int y = 0; y < Height; y++)
                 {
+                    //set position in array
                     positionsArray[x * Width + y] = new Vector3Int(x, y, 0);
-                    // Get what tile is at this position
+                    // Get the tile index at this position
                     var typeOfTile = GetTile(x, y);
-                    // Get the ScriptableObject that matches this type and insert it
+                    // Get the Tile object corresponding to this index
                     tilesArray[x * Width + y] = tileDict[typeOfTile];
                 }
             }
 
+            //set all tiles via arrays and render them
             TMap.SetTiles(positionsArray, tilesArray);
             TMap.RefreshAllTiles();
         }

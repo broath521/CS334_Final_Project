@@ -1,8 +1,10 @@
 ﻿namespace Assets.Tilemaps
 {
-    public enum GroundTileType
+    public enum TerrainType
     {
-        /* 0 - 1000 */
+        /*
+         * These are the tile indexes and corresponding tile names to be used when generating the terrain
+         */
         DeepWater = 0,
         UndeepWater = 1,
         Beach1 = 2,
