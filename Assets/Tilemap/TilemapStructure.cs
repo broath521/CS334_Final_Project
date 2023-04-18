@@ -30,6 +30,10 @@ namespace Assets.Tilemaps
         PerlinGeneration perlinGen; //Perlin noise generation script
         RiverGenerator riverGen; //L-system river generation script
 
+        //noise maps
+        float[] perlinMap;
+        float[] distanceMap;
+
         List<Vector2> riverMap, riverMapUpdated; //River mask storage
 
         private void Awake()
@@ -63,11 +67,11 @@ namespace Assets.Tilemaps
                 tileDict.Add((int)tiletype.GroundTile, tile);
             }
             //Generate river from L-system
-            riverGen.Apply(this);
+            riverGen.Apply(this, perlinGen);
             riverMap = riverGen.UpdateRiver(this);
             //Perlin noise to tile map
-            perlinGen.Generate(this, riverMap);
-
+            perlinMap = perlinGen.Generate(this, riverMap, riverGen);
+            distanceMap = perlinGen.GenerateDistanceMap(Width, Height, riverMap, riverGen);
             // Render updated terrain tiles
             RenderTerrainTiles();
         }
@@ -76,7 +80,7 @@ namespace Assets.Tilemaps
         {
             //Wait until the user presses the return key, then generate river block by block
             if (Input.GetKeyDown(KeyCode.Return)) {
-                StartCoroutine(riverGen.DrawConnections(this, TMap));
+                StartCoroutine(riverGen.DrawConnections(this, TMap, perlinMap, distanceMap));
             }
         }
 

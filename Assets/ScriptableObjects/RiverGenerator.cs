@@ -6,7 +6,9 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using Unity.Burst;
 using Unity.Mathematics;
+using UnityEditor.Build.Content;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
@@ -19,26 +21,29 @@ namespace Assets.ScriptableObjects
     public class RiverGenerator : MonoBehaviour
    {
         System.Random random;
-        public string riverFile;
         string lSystemString;
         List<Vector2> riverMap; //river mask storage for each turning point
         List<Vector2> entireRiver; //every tile to draw for the river
         List<Vector2> updatedEntireRiver; //modifed entireRiver
         List<Vector2> updatedRiverMap;
 
+        PerlinGeneration perlinGen; //script access for perlin generation data
+
         float lowerAng = 0;
         float upperAng = 0;
         int iterations = 0;
         string axiom;
-
-        public float distance = 5f;
-        public float startingAngle = 90;
         int seed;
 
+        [Header("River settings")]
+        public string riverFile;
+        public float distance = 5f;
+        public float startingAngle = 90;
         public int startX = 0;
         public int startY = 0;
+        public int mainRadius = 1, branchRadius = 0;
 
-        int leftBound, rightBound, bottomBound, topBound;
+        public int leftBound, rightBound, bottomBound, topBound;
 
         //class and dictionary to hold the rules of the L-system
         class Rule
@@ -54,8 +59,11 @@ namespace Assets.ScriptableObjects
         }
         private Dictionary<char, List<Rule>> rules = new Dictionary<char, List<Rule>>();
 
-        public List<Vector2> Apply(TilemapStructure tilemap)
+        public List<Vector2> Apply(TilemapStructure tilemap, PerlinGeneration _perlinGen)
         {
+            perlinGen = _perlinGen; //get script reference for perlin generation class
+
+            //grab seed from main script and seed functions
             seed = GameObject.Find("TerrainMap").GetComponent<TilemapStructure>().Seed;
             random = new System.Random(seed);
             riverMap = new List<Vector2>();
@@ -65,7 +73,6 @@ namespace Assets.ScriptableObjects
             ReadFileData(stream);
             // Generate L-system string
             lSystemString = GenerateLSystem();
-            //Debug.Log(lSystemString);
 
             // Draw L-system onto tilemap
             riverMap = DrawRiver(lSystemString, tilemap);
@@ -132,11 +139,14 @@ namespace Assets.ScriptableObjects
 
         private string GenerateLSystem()
         {
+            //start with axiom
             string returnStr = axiom;
+            //loop through every iteration to update returnStr
             for(int i = 0; i < iterations; i++)
             {
                 foreach (char c in returnStr)
                 {
+                    //if the overall ruleset contains the character c, get random number from 0 to 1 and pick from character's ruleset
                     if (rules.ContainsKey(c))
                     {
                         List<Rule> ruleSet = rules[c];
@@ -164,11 +174,11 @@ namespace Assets.ScriptableObjects
         public List<Vector2> DrawRiver(string str, TilemapStructure tilemap)
         {
             entireRiver = new List<Vector2>();
-            var random = new System.Random(seed);
+            var random = new System.Random(seed); //seed random generator
             float[] angles = { lowerAng, upperAng };
-            float rightChance = 0.5f;
-            float turnRand, randAngle;
-            float currAngle = startingAngle;
+            float rightChance = 0.5f; //chance of taking a right turn instead of left
+            float randTurnchance, randAngle; //random turning chance and generated random angle
+            float currAngle = startingAngle; //set the current angle to the user given start angle
 
             //stacks for saving turtle data
             Stack<Vector3> locationStack = new Stack<Vector3>();
@@ -207,8 +217,6 @@ namespace Assets.ScriptableObjects
                     randAngle = angles[0];
                 }
 
-                //Debug.Log(randAngle);
-
                 if (str[i] == 'F' || str[i] == 'B' || str[i] == 'A' || str[i] == 'a' || str[i] == 'b')
                 { //main river components
                     prevPos = currentPos;
@@ -216,15 +224,18 @@ namespace Assets.ScriptableObjects
                     currentPos.x += (int)(Mathf.Cos(currAngle * Mathf.PI / 180) * distance);
                     currentPos.y += (int)(Mathf.Sin(currAngle * Mathf.PI / 180) * distance);
                     UpdateBounds(currentPos);
-                    riverMap.Add(new Vector2(currentPos.x, currentPos.y)); //add the updated point to the rivermap
+                    //add the updated point to the rivermap
+                    riverMap.Add(new Vector2(currentPos.x, currentPos.y));
 
+                    //grab every tile between prev and current inclusive
                     tilesBetween = GetTilesInLine(prevPos, currentPos);
 
                     foreach (Vector2 tile in tilesBetween)
                     {
-                        List<Vector2> neighbors = GetTileNeighbors((int)tile.x, (int)tile.y);
+                        List<Vector2> neighbors = GetTileNeighbors((int)tile.x, (int)tile.y, mainRadius);
                         foreach (Vector2 newtile in neighbors)
                         {
+                            //if the neighbor is not already in the river, add it
                             if (!entireRiver.Contains(newtile)){
                                 entireRiver.Add(newtile);
                             }
@@ -233,27 +244,37 @@ namespace Assets.ScriptableObjects
                     }
                 }
                 else if (str[i] == 'g' || str[i] == 'G')
-                { //main river components
+                { //branch components
                     prevPos = currentPos;
 
-                    //update location
                     currentPos.x += (int)(Mathf.Cos(currAngle * Mathf.PI / 180) * distance);
                     currentPos.y += (int)(Mathf.Sin(currAngle * Mathf.PI / 180) * distance);
-
+                    UpdateBounds(currentPos);
                     //add the updated point to the rivermap
                     riverMap.Add(new Vector2(currentPos.x, currentPos.y));
 
+                    //grab every tile between prev and current inclusive
                     tilesBetween = GetTilesInLine(prevPos, currentPos);
 
                     foreach (Vector2 tile in tilesBetween)
                     {
+                        List<Vector2> neighbors = GetTileNeighbors((int)tile.x, (int)tile.y, branchRadius);
+                        foreach (Vector2 newtile in neighbors)
+                        {
+                            //if the neighbor is not already in the river, add it
+                            if (!entireRiver.Contains(newtile))
+                            {
+                                entireRiver.Add(newtile);
+                            }
+                        }
                         entireRiver.Add(tile);
                     }
                 }
                 else if (str[i] == '+')
                 {
-                    turnRand = (random.Next(0, 1000) / 1000f);
-                    if (turnRand < rightChance)
+                    //pick a random number, if less than right chance, change current angle and update right chance
+                    randTurnchance = (random.Next(0, 1000) / 1000f);
+                    if (randTurnchance < rightChance)
                     {
                         currAngle -= randAngle;
                         rightChance -= 0.05f;
@@ -266,6 +287,7 @@ namespace Assets.ScriptableObjects
                 }
                 else if (str[i] == '[')
                 {
+                    //push current items to the top of the stack
                     rightChanceStack.Push(rightChance);
                     locationStack.Push(currentPos);
                     previousStack.Push(prevPos);
@@ -273,78 +295,81 @@ namespace Assets.ScriptableObjects
                 }
                 else if (str[i] == ']')
                 {
+                    //take out top of stack and update variables
                     currentPos = locationStack.Peek();
                     prevPos = previousStack.Peek();
                     currAngle = angleStack.Peek();
                     rightChance = rightChanceStack.Peek();
-
+                    //remove top item from stack
                     rightChanceStack.Pop();
                     locationStack.Pop();
                     previousStack.Pop();
                     angleStack.Pop();
                 }
             }
-            
             return riverMap;
         }
 
         //Bresenham's line algorithm to get every instance of a tile between start and end points
-        public List<Vector2> GetTilesInLine(Vector2 startTile, Vector2 endTile)
+        public List<Vector2> GetTilesInLine(Vector2 start, Vector2 end)
         {
             List<Vector2> tiles = new List<Vector2>();
+            Vector2 startTemp = start, endTemp = end;
 
-            int x0 = (int)startTile.x;
-            int y0 = (int)startTile.y;
-            int x1 = (int)endTile.x;
-            int y1 = (int)endTile.y;
+            int dx = Mathf.Abs((int)endTemp.x - (int)startTemp.x); //change in x
+            int dy = Mathf.Abs((int)endTemp.y - (int)startTemp.y); //change in y
 
-            int dx = Mathf.Abs(x1 - x0);
-            int dy = Mathf.Abs(y1 - y0);
-            int sx = (x0 < x1) ? 1 : -1;
-            int sy = (y0 < y1) ? 1 : -1;
-            int err = dx - dy;
+            int sx = ((int)start.x < (int)end.x) ? 1 : -1; //x direction
+            int sy = ((int)start.y < (int)end.y) ? 1 : -1; //y direction
 
-            while (true)
+            int err = dx - dy; //error variable for tracking cumulative error
+            int errL = 0; //logic term to track when to change y-coordinate
+
+            while (!((int)startTemp.x == (int)endTemp.x && (int)startTemp.y == (int)endTemp.y))
             {
-                tiles.Add(new Vector2Int(x0, y0));
+                //add the new tile
+                tiles.Add(new Vector2((int)startTemp.x, (int)startTemp.y));
 
-                if (x0 == x1 && y0 == y1)
-                    break;
-
-                int e2 = 2 * err;
-                if (e2 > -dy)
+                errL = 2 * err;
+                if (errL > -dy)
                 {
                     err -= dy;
-                    x0 += sx;
+                    startTemp.x += sx;
                 }
-                if (e2 < dx)
+                if (errL < dx)
                 {
                     err += dx;
-                    y0 += sy;
+                    startTemp.y += sy;
                 }
             }
 
             return tiles;
         }
 
-        public List<Vector2> GetTileNeighbors(int x, int y)
+        //gets the neighbors of a given position within a radius
+        public List<Vector2> GetTileNeighbors(int x, int y, int radius)
         {
             List<Vector2> neighbors = new List<Vector2>();
 
-            for (int i = x - 1; i <= x + 1; i++)
+            for (int i = x - radius; i <= x + radius; i++)
             {
-                for (int j = y - 1; j <= y + 1; j++)
+                for (int j = y - radius; j <= y + radius; j++)
                 {
-                    if (i == x && j == y) continue; // Skip the tile itself
+                    if (i == x && j == y)
+                    {
+                        continue; //skip itself
+                    }
                     neighbors.Add(new Vector2(i, j));
                 }
             }
             return neighbors;
         }
 
-        public IEnumerator DrawConnections(TilemapStructure tilemap, Tilemap TMap)
+        public IEnumerator DrawConnections(TilemapStructure tilemap, Tilemap TMap, float[] perlinMap, float[] distanceMap)
         {
-            foreach(Vector2 tile in updatedEntireRiver)
+            List<Vector2> distanceNeighbors; //list of neighbors to access within distance map
+            float newHeight = 0; //height to update with distance map
+            foreach (Vector2 tile in updatedEntireRiver)
             {
                 if (tile.x >= 0 && tile.x < tilemap.Width && tile.y >= 0 && tile.y < tilemap.Height)
                 {
@@ -353,6 +378,38 @@ namespace Assets.ScriptableObjects
                     Tile typeTile = tilemap.tileDict[tilemap.GetTile((int)tile.x, (int)tile.y)];
                     TMap.SetTile(new Vector3Int((int)tile.x, (int)tile.y, 0), typeTile);
                     TMap.RefreshTile(new Vector3Int((int)tile.x, (int)tile.y, 0));
+
+                    if(updatedRiverMap.Contains(new Vector2(tile.x, tile.y)))
+                    {
+                        distanceNeighbors = GetTileNeighbors((int)tile.x, (int)tile.y, (int)perlinGen.riverRange);
+                        for(int i = 0; i < distanceNeighbors.Count; i++)
+                        {
+                            int x = (int)distanceNeighbors[i].x;
+                            int y = (int)distanceNeighbors[i].y;
+
+                            Debug.Log(distanceMap.Length);
+                            if (x >= 0 && x < tilemap.Width && y >= 0 && y < tilemap.Height)
+                            {
+                                if (distanceMap[y * tilemap.Width + x] == 1 && ((perlinMap[y * tilemap.Width + x] <= perlinGen.getTypeHeight(1)) || !updatedEntireRiver.Contains(new Vector2(x, y))))
+                                {
+                                    distanceMap[y * tilemap.Width + x] = 0;
+                                    newHeight = perlinGen.changeTerrain(perlinMap[y * tilemap.Width + x]);
+                                    for (int j = 0; j < 12; j++)
+                                    {
+                                        //If the height value at position is <= user defined limit, set that tile to be of that indexed type
+                                        if (newHeight <= perlinGen.getTypeHeight(j))
+                                        {
+                                            tilemap.SetTile(x, y, (int)perlinGen.getTypeGround(j));
+                                            typeTile = tilemap.tileDict[tilemap.GetTile(x, y)];
+                                            TMap.SetTile(new Vector3Int(x, y, 0), typeTile);
+                                            TMap.RefreshTile(new Vector3Int(x, y, 0));
+                                            break;
+                                        }
+                                    }
+                                }
+                            }    
+                        }
+                    }
 
                     yield return new WaitForSeconds(0.002f);
                 }
@@ -388,34 +445,29 @@ namespace Assets.ScriptableObjects
             updatedEntireRiver = new List<Vector2>();
             List<Vector2> currRiverMap = entireRiver;
 
-            Vector2 tempVec = new();
+            Vector2 tempVec, tempVec2 = new();
 
             if (leftBound < 0) { 
                 for(int i = 0; i < currRiverMap.Count; i++)
                 {
                     tempVec.x = currRiverMap[i].x;
                     tempVec.y = currRiverMap[i].y;
+                    tempVec2 = tempVec;
 
                     tempVec.x += Mathf.Abs(leftBound);
                     if (bottomBound < 0)
                     {
                         tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height/5;
                     }
+
                     updatedEntireRiver.Add(tempVec);
-                }
-
-                for (int i = 0; i < riverMap.Count; i++)
-                {
-                    tempVec.x = riverMap[i].x;
-                    tempVec.y = riverMap[i].y;
-
-                    tempVec.x += Mathf.Abs(leftBound);
-                    if (bottomBound < 0)
+                    if (riverMap.Contains(tempVec2))
                     {
-                        tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height / 5;
+                        updatedRiverMap.Add(tempVec);
                     }
-                    updatedRiverMap.Add(tempVec);
                 }
+                rightBound += Mathf.Abs(leftBound);
+                leftBound = 0;
             }
             else if (rightBound > tilemap.Width)
             {
@@ -423,26 +475,22 @@ namespace Assets.ScriptableObjects
                 {
                     tempVec.x = currRiverMap[i].x;
                     tempVec.y = currRiverMap[i].y;
+                    tempVec2 = tempVec;
 
                     tempVec.x -= rightBound - tilemap.Width;
                     if (bottomBound < 0)
                     {
                         tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height/5;
                     }
-                    updatedEntireRiver.Add(tempVec);
-                }
-                for (int i = 0; i < riverMap.Count; i++)
-                {
-                    tempVec.x = riverMap[i].x;
-                    tempVec.y = riverMap[i].y;
 
-                    tempVec.x -= rightBound - tilemap.Width;
-                    if (bottomBound < 0)
+                    updatedEntireRiver.Add(tempVec);
+                    if (riverMap.Contains(tempVec2))
                     {
-                        tempVec.y += Mathf.Abs(bottomBound) + tilemap.Height / 5;
+                        updatedRiverMap.Add(tempVec);
                     }
-                    updatedRiverMap.Add(tempVec);
                 }
+                leftBound -= rightBound - tilemap.Width;
+                rightBound = tilemap.Width;
             }
             else
             {

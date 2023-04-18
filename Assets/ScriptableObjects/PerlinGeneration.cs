@@ -11,13 +11,8 @@ namespace Assets.ScriptableObjects
     public class PerlinGeneration : MonoBehaviour
     {
         [Header("Perlin settings")]
-        // The more octaves, the longer generation will take
-        public int Octaves; 
-        [Range(0, 1)]
-        public float Persistance;
-        public float Lacunarity;
-        public float NoiseScale;
-        public Vector2 Offset;
+        public int octaves;
+        public float persistance, lacunarity, scale;
 
         //tilemap script and value class
         [Serializable]
@@ -42,13 +37,13 @@ namespace Assets.ScriptableObjects
             //initialize array of tiles by height
             TileTypes = TileTypes.OrderBy(a => a.Height).ToArray();
         }
-        public void Generate(TilemapStructure tilemap, List<Vector2> riverMap)
+        public float[] Generate(TilemapStructure tilemap, List<Vector2> riverMap, RiverGenerator riverGen)
         {
             float height = 0;
             //generate a noise map with given parameters
-            noiseMap = GenerateNoiseMap(tilemap.Width, tilemap.Height, tilemap.Seed, NoiseScale, Octaves, Persistance, Lacunarity, Offset);
+            noiseMap = GenerateNoiseMap(tilemap.Width, tilemap.Height, tilemap.Seed, scale, octaves, persistance, lacunarity);
             //Generate a distance map corresponding to generated river
-            distanceMap = GenerateDistanceMap(tilemap.Width, tilemap.Height, riverMap);
+            //distanceMap = GenerateDistanceMap(tilemap.Width, tilemap.Height, riverMap, riverGen);
 
             //go through bounds to check noise and distance maps and change terrain
             for (int x=0; x < tilemap.Width; x++)
@@ -56,14 +51,7 @@ namespace Assets.ScriptableObjects
                 for (int y = 0; y < tilemap.Height; y++)
                 {
                     //if the distanceMap flag at this position is set, change the tile height
-                    if (distanceMap[y * tilemap.Width + x] == 1)
-                    {
-                        height = changeTerrain(noiseMap[y * tilemap.Width + x]);
-                    }
-                    else
-                    {
-                        height = noiseMap[y * tilemap.Width + x];
-                    }
+                    height = noiseMap[y * tilemap.Width + x];
 
                     //Check all of the assigned tile types
                     for (int i = 0; i < TileTypes.Length; i++)
@@ -77,91 +65,102 @@ namespace Assets.ScriptableObjects
                     }
                 }
             }
+
+            return noiseMap;
         }
 
-        public static float[] GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity, Vector2 offset)
+        public float[] GenerateNoiseMap(int width, int height, int seed, float scale, int octaves, float persistance, float lacunarity)
         {
-            float[] noiseMap = new float[mapWidth * mapHeight];
-            var random = new System.Random(seed);
-            octaves = octaves <= 0 ? 1 : octaves;
+            //coordinate iterators
+            int x, y;
 
-            Vector2[] octaveOffsets = new Vector2[octaves];
+            float[] perlinMap = new float[width * height];
+            var random = new System.Random(seed);
+
+            //cant have no octaves or scale
+            octaves = octaves <= 0 ? 1 : octaves;
+            scale = scale <= 0f ? 0.01f : scale;
+
+            //needed because of how Unity's tile map renderer is orientated at a corner
+            float halfWidth = width / 2f;
+            float halfHeight = height / 2f;
+
+            Vector2[] octaveArr = new Vector2[octaves];
             for (int i = 0; i < octaves; i++)
             {
-                float offsetX = random.Next(-100000, 100000) + offset.x;
-                float offsetY = random.Next(-100000, 100000) + offset.y;
-                octaveOffsets[i] = new Vector2(offsetX, offsetY);
+                float randX = random.Next(-100000, 100000);
+                float randY = random.Next(-100000, 100000);
+                octaveArr[i] = new Vector2(randX, randY);
             }
 
-            if (scale <= 0f)
+            //container variables for the upper and lower limits of the perlin map heights
+            float maxHeight = float.MinValue;
+            float minHeight = float.MaxValue;
+
+            float perlinValue = 0f;
+            Vector2 sample = new Vector2();
+
+            for (x = 0; x < width; x++)
             {
-                scale = 0.0001f;
-            }
-
-            float maxNoiseHeight = float.MinValue;
-            float minNoiseHeight = float.MaxValue;
-
-            // When changing noise scale, it zooms from top-right corner
-            // This will make it zoom from the center
-            float halfWidth = mapWidth / 2f;
-            float halfHeight = mapHeight / 2f;
-
-            for (int x = 0, y; x < mapWidth; x++)
-            {
-                for (y = 0; y < mapHeight; y++)
+                for (y = 0; y < height; y++)
                 {
-                    // Define base values for amplitude, frequency and noiseHeight
-                    float amplitude = 1;
-                    float frequency = 1;
-                    float noiseHeight = 0;
+                    // Define base values for amplitude, frequency, and cumalative height
+                    float amp = 1;
+                    float freq = 1;
+                    float cumalative = 0;
 
                     // Calculate noise for each octave
                     for (int i = 0; i < octaves; i++)
                     {
-                        // We sample a point (x,y)
-                        float sampleX = (x - halfWidth) / scale * frequency + octaveOffsets[i].x;
-                        float sampleY = (y - halfHeight) / scale * frequency + octaveOffsets[i].y;
+                        sample.x = (x - halfWidth) / scale * freq + octaveArr[i].x;
+                        sample.y = (y - halfHeight) / scale * freq + octaveArr[i].y;
 
-                        // Use unity's implementation of perlin noise
-                        float perlinValue = Mathf.PerlinNoise(sampleX, sampleY) * 2 - 1;
+                        //built-in Unity method for perlin generation
+                        perlinValue = Mathf.PerlinNoise(sample.x, sample.y) * 2 - 1;
 
-                        // noiseHeight is our final noise, we add all octaves together here
-                        noiseHeight += perlinValue * amplitude;
-                        amplitude *= persistance;
-                        frequency *= lacunarity;
+                        //update based on generated value and user inputs
+                        cumalative += perlinValue * amp;
+                        amp *= persistance;
+                        freq *= lacunarity;
                     }
 
-                    // We need to find the min and max noise height in our noisemap
-                    // So that we can later interpolate the min and max values between 0 and 1 again
-                    if (noiseHeight > maxNoiseHeight)
-                        maxNoiseHeight = noiseHeight;
-                    else if (noiseHeight < minNoiseHeight)
-                        minNoiseHeight = noiseHeight;
+                    //update min and max heights
+                    maxHeight = (cumalative > maxHeight) ? cumalative : maxHeight;
+                    minHeight = (cumalative < minHeight) ? cumalative : minHeight;
 
                     // Assign our noise
-                    noiseMap[y * mapWidth + x] = noiseHeight;
+                    perlinMap[y * width + x] = cumalative;
                 }
             }
 
-            for (int x = 0, y; x < mapWidth; x++)
+            for (x = 0; x < width; x++)
             {
-                for (y = 0; y < mapHeight; y++)
+                for (y = 0; y < height; y++)
                 {
-                    // Returns a value between 0f and 1f based on noiseMap value
-                    // minNoiseHeight being 0f, and maxNoiseHeight being 1f
-                    noiseMap[y * mapWidth + x] = Mathf.InverseLerp(minNoiseHeight, maxNoiseHeight, noiseMap[y * mapWidth + x]);
+                    //Normalize to a range of 0 and 1 within min and max height
+                    perlinMap[y * width + x] = Mathf.InverseLerp(minHeight, maxHeight, perlinMap[y * width + x]);
                 }
             }
-            return noiseMap;
+
+            return perlinMap;
         }
         
-        public float[] GenerateDistanceMap(int width, int height, List<Vector2> riverMap)
+
+        public float[] GenerateDistanceMap(int width, int height, List<Vector2> riverMap, RiverGenerator riverGen)
         {
             float[] distanceMap = new float[width * height];
 
-            for (int x = 0, y; x < width; x++)
+            for(int i = 0; i < width; i++)
             {
-                for (y = 0; y < height; y++)
+                for(int j = 0; j < height; j++)
+                {
+                    distanceMap[i * width + j] = 100; //set to a large number so it does not get flagged in last step
+                }
+            }
+            
+            for (int x = riverGen.leftBound - (int)riverRange-2; x < riverGen.rightBound + (int)riverRange+2; x++)
+            {
+                for (int y = riverGen.bottomBound - (int)riverRange-2; y < riverGen.topBound + (int)riverRange+2; y++)
                 {
                     // Calculate the distance to the nearest river tile
                     float minDistance = float.MaxValue;
@@ -173,7 +172,10 @@ namespace Assets.ScriptableObjects
                     }
 
                     // Assign the calculated distance to the corresponding tile in the distance map
-                    distanceMap[y * width + x] = minDistance;
+                    if (x >= 0 && x < width && y >= 0 && y < height)
+                    {
+                        distanceMap[y * width + x] = minDistance;
+                    }
                 }
             }
 
@@ -193,7 +195,7 @@ namespace Assets.ScriptableObjects
             return distanceMap;
         }
 
-        private float changeTerrain(float currentHeight)
+        public float changeTerrain(float currentHeight)
         {
             float newHeight;
 
@@ -202,11 +204,30 @@ namespace Assets.ScriptableObjects
             {
                 newHeight = TileTypes[2].Height;
             }
-            //anything above beach2, subtract user defined value from height
-            else if(currentHeight > TileTypes[3].Height && currentHeight <= TileTypes[TileTypes.Length - 1].Height)
+            //Anything above beach2 has special rules
+            else if(currentHeight > TileTypes[3].Height && currentHeight <= TileTypes[4].Height)
             {
-                currentHeight -= adjustVal;
-                newHeight = currentHeight;
+                newHeight = TileTypes[6].Height;
+            }
+            else if (currentHeight > TileTypes[4].Height && currentHeight <= TileTypes[5].Height)
+            {
+                newHeight = TileTypes[7].Height;
+            }
+            else if (currentHeight > TileTypes[6].Height && currentHeight <= TileTypes[7].Height)
+            {
+                newHeight = TileTypes[3].Height;
+            }
+            else if (currentHeight > TileTypes[7].Height && currentHeight <= TileTypes[8].Height)
+            {
+                newHeight = TileTypes[7].Height;
+            }
+            else if (currentHeight > TileTypes[8].Height && currentHeight <= TileTypes[9].Height)
+            {
+                newHeight = TileTypes[8].Height;
+            }
+            else if (currentHeight > TileTypes[9].Height && currentHeight <= TileTypes[TileTypes.Length-1].Height)
+            {
+                newHeight = TileTypes[9].Height;
             }
             else
             {
@@ -214,6 +235,16 @@ namespace Assets.ScriptableObjects
             }
 
             return newHeight;
+        }
+
+        public float getTypeHeight(int ind)
+        {
+            return TileTypes[ind].Height;
+        }
+
+        public TerrainType getTypeGround(int ind)
+        {
+            return TileTypes[ind].GroundTile;
         }
     }
 }

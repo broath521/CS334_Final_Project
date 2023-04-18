@@ -220,10 +220,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0b6ae8adffc97c248b18c06f18fd3919, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 150
-  zoomSpeed: 30
-  zoomOffset: 0.2
-  minZoom: 50
+  moveSpeed: 200
+  zoomSpeed: 60
+  zoomOffset: 0.3
+  minZoom: 100
   maxZoom: 400
   terrainMap: {fileID: 880319959}
 --- !u!1 &880319959
@@ -307,7 +307,7 @@ TilemapRenderer:
   m_ChunkCullingBounds: {x: 0, y: 0, z: 0}
   m_MaxChunkCount: 16
   m_MaxFrameAge: 16
-  m_SortOrder: 0
+  m_SortOrder: 3
   m_Mode: 0
   m_DetectChunkCullingBounds: 0
   m_MaskInteraction: 0
@@ -364,7 +364,7 @@ MonoBehaviour:
   Width: 400
   Height: 400
   TileSize: 8
-  Seed: 753763
+  Seed: 78123412
   TileTypes:
   - GroundTile: 0
     Color: {r: 0.20038268, g: 0.3928924, b: 0.745283, a: 0}
@@ -403,10 +403,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   riverFile: Assets/Rivers/river2.txt
-  distance: 4
+  distance: 5
   startingAngle: 120
   startX: 250
   startY: 0
+  mainRadius: 1
+  branchRadius: 0
+  leftBound: 0
+  rightBound: 0
+  bottomBound: 0
+  topBound: 0
 --- !u!114 &880319966
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -419,11 +425,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: eeabe58ae5c8a0a4aa30b0ed9383e7c9, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  Octaves: 6
-  Persistance: 0.357
-  Lacunarity: 2.9
-  NoiseScale: 45
-  Offset: {x: 0, y: 0}
+  octaves: 5
+  persistance: 0.344
+  lacunarity: 3
+  scale: 45
   TileTypes:
   - Height: 0
     GroundTile: 0
@@ -450,7 +455,7 @@ MonoBehaviour:
   - Height: 1
     GroundTile: 11
   adjustVal: 0.15
-  riverRange: 4
+  riverRange: 6
 --- !u!1 &1980643147
 GameObject:
   m_ObjectHideFlags: 0

@@ -3,10 +3,10 @@
 A
 
 A 0.70 : F+A
-A 0.30 : F[+ggG]+A
+A 0.30 : F[+gG]+A
 
-G 0.50 : g+g+g+G
-G 0.30 : ggG
-G 0.20 : g[+g+G]+G
+G 0.50 : g+g+G
+G 0.30 : gG
+G 0.20 : g[+G]+G
 
 
