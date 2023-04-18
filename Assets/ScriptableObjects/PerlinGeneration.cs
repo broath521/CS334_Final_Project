@@ -148,7 +148,7 @@ namespace Assets.ScriptableObjects
 
         public float[] GenerateDistanceMap(int width, int height, List<Vector2> riverMap, RiverGenerator riverGen)
         {
-            float[] distanceMap = new float[width * height];
+            distanceMap = new float[width * height];
 
             for(int i = 0; i < width; i++)
             {
@@ -221,13 +221,9 @@ namespace Assets.ScriptableObjects
             {
                 newHeight = TileTypes[7].Height;
             }
-            else if (currentHeight > TileTypes[8].Height && currentHeight <= TileTypes[9].Height)
+            else if (currentHeight > TileTypes[8].Height && currentHeight <= TileTypes[TileTypes.Length - 1].Height)
             {
                 newHeight = TileTypes[8].Height;
-            }
-            else if (currentHeight > TileTypes[9].Height && currentHeight <= TileTypes[TileTypes.Length-1].Height)
-            {
-                newHeight = TileTypes[9].Height;
             }
             else
             {
